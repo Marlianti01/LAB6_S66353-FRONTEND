@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8" />
+    <title>Save and load on firebase Storage</title>
+    <style>
+        img{
+            height: 200px;
+            width:200px;
+            border: 2px black solid;
+        }
+    </style>
+</head>
+<body>
+    <label>Image Name</label>
+    <input type="text" id="namebox">
+    <label id="extlab"></label><br><br>
+    <img id="myimg"> 
+    <label id="upprogress"></label><br><br>
+
+    <button id="selbtn">Select Image</button>
+    <button id="upbtn">Upload Image</button>
+    <button id="downbtn">Retrieve Image</button>
+
+    <script type="module">
+
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+
+
+
+      
+
+        const firebaseConfig = {
+          apiKey: "AIzaSyDs0JUJCnP85lFE2kRYH90GE6ugMxMo0Bs",
+          authDomain: "fire9db-db142.firebaseapp.com",
+          projectId: "fire9db-db142",
+          storageBucket: "fire9db-db142.appspot.com",
+          messagingSenderId: "595879751707",
+          appId: "1:595879751707:web:e9e67b6c93aea366e5c8be"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+
+        import {getStorage, ref as sRef, uploadBytesResumable, getDownloadURL}
+            from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+        import {getDatabase, ref, set, child, get, update, remove}
+            from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+        const realdb = getDatabase();
+
+        var files = [];
+        var reader = new FileReader();
+
+        var namebox = document.getElementById('namebox');
+        var extlab = document.getElementById('extlab');
+        var myimg = document.getElementById('myimg');
+        var proglab = document.getElementById('upprogress');
+        var SelBtn = document.getElementById('selbtn');
+        var UpBtn = document.getElementById('upbtn');
+        var DownBtn = document.getElementById('downbtn');
+
+        var input = document.createElement('input');
+        input.type = 'file';
+
+        input.onchange = e => {
+            files = e.target.files;
+
+            var extension = GetFileExt(files[0]);
+            var name = GetFileName(files[0]);
+
+            namebox.value= name;
+            extlab.innerHTML = extension;
+
+            reader.readAsDataURL(files[0]);
+        }
+
+        reader.onload = function(){
+            myimg.src = reader.result;
+        }
+
+        function GetFileExt(file){
+            var temp = file.name.split('.');
+            var ext = temp.slice(temp.length-1, temp.length);
+            return '.' + ext[0];
+        }
+
+        function GetFileName(file){
+            var temp = file.name.split('.');
+            var fname = temp.slice(0,-1).join('.');
+            return fname;
+        }
+
+        async function UploadProcess(){
+            var ImgToUpload = files[0];
+            var ImgName = namebox.value + extlab.innerHTML;
+
+            if(!ValidateName()){
+                alert('name cannot contain ".", "#", "$", "[", or "]"');
+                return;
+            }
+
+            const metaData = {
+                contentType: ImgToUpload.type
+            }
+
+            const storage = getStorage();
+
+            const storageRef = sRef(storage, "Images/" + ImgName);
+
+            const UploadTask = uploadBytesResumable(storageRef, ImgToUpload, metaData);
+
+            UploadTask.on('state_changed', (snapshot)=>{
+                var progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                proglab.innerHTML= "Upload " + progress + "%";
+            },
+            (error) =>{
+                alert("error : image not uploaded!");
+            },
+            () =>{
+                getDownloadURL(UploadTask.snapshot.ref).then((downloadURL) => {
+                    SaveURLtoRealtimeDB(downloadURL);
+                });
+            }
+        );
+
+        }
+
+       // <!--Function for realtime dataase-->
+
+       function SaveURLtoRealtimeDB(URL){
+        var name = namebox.value;
+        var ext = extlab.innerHTML;
+        set(ref(realdb, "imageLinks/"+name),{
+            ImageName: (name+ext),
+            ImgUrl: URL
+        });
+       }
+
+       function GetUrlfromRealtimeDB(){
+        var name = namebox.value;
+        var dbRef = ref(realdb);
+        get(child(dbRef, "imageLinks/"+name)).then((snapshot)=>{
+            if(snapshot.exists()){
+                myimg.src = snapshot.val().ImgUrl;
+            }
+            else {
+                    alert("No image found for the given name.");
+                }
+        })
+        
+       }
+
+       function ValidateName(){
+        var regex = /[\.#$[\]]/
+        return !(regex.test(namebox.value));
+       }
+
+        UpBtn.onclick = UploadProcess;
+        DownBtn.onclick = GetUrlfromRealtimeDB;
+
+      SelBtn.addEventListener('click', () => input.click());
+      </script>
+</body>
+</html>
